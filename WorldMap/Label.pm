@@ -3,21 +3,7 @@ package Image::WorldMap::Label;
 use strict;
 use Image::Imlib2;
 use Exporter;
-use vars qw(@ISA @EXPORT_OK $TYPE $XOFFSET $YOFFSET);
-
-@ISA = qw(Exporter);
-@EXPORT_OK = qw(new 
-		text
-		x
-		y
-		width
-		height
-		move
-		draw
-	       );
-
-#my $XOFFSET = 5;
-#my $YOFFSET = -9;
+use vars qw($XOFFSET $YOFFSET);
 
 $XOFFSET = 0;
 $YOFFSET = 0;
@@ -28,8 +14,8 @@ sub new {
   my $self = {};
   $self->{X} = $x;
   $self->{Y} = $y;
-  $self->{LABELX} = $x;
-  $self->{LABELY} = $y;
+  $self->{LABELX} = $x + $XOFFSET;
+  $self->{LABELY} = $y + $YOFFSET;
   $self->{TEXT} = $text;
   $self->{DOTCOLOUR} = $dot_colour;
 
@@ -86,8 +72,6 @@ sub move {
 sub draw_label {
   my($self, $image) = @_;
   my($x, $y, $labelx, $labely, $text) = ($self->{X}, $self->{Y}, $self->{LABELX}, $self->{LABELY}, $self->{TEXT});
-  $labelx += $XOFFSET;
-  $labely += $YOFFSET;
 
   if (defined $text) {
     # Draw the white outline
@@ -123,7 +107,7 @@ sub draw_dot {
 
   my $radius = 1;
 
-  if ($labelx != $x or $labely != $y) {
+  if (0 && ($labelx != $x or $labely != $y)) {
     # moved
 
     my($q, $w) = ($labelx, $labely);

@@ -1,14 +1,328 @@
 package Image::WorldMap;
 
 use strict;
+use Carp;
 use Image::Imlib2;
 use Image::WorldMap::Label;
 use vars qw($VERSION);
-$VERSION = '0.13';
+$VERSION = '0.14';
 
-use Inline C => 'DATA',
-  VERSION => '0.13',
-  NAME => 'Image::WorldMap';
+# Class method, creates a new map
+sub new {
+  my($class, $filename, $label) = @_;
+
+  my $self = {};
+
+  my $image = Image::Imlib2->load($filename);
+  if (not defined $image) {
+    croak("Image::WorldMap: unable to load $filename");
+    return;
+  }
+  my $w = $image->get_width;
+  my $h = $image->get_height;
+  $image->add_font_path("../");
+  $image->add_font_path("examples/");
+
+  $self->{IMAGE} = $image;
+  $self->{LABELS} = [];
+  $self->{LABEL} = $label;
+  $self->{W} = $w;
+  $self->{H} = $h;
+  bless $self, $class;
+
+  if (defined $label) {
+    # Determine the label offset for the current font
+    $image->load_font($label);
+    my $testlabel = Image::WorldMap::Label->new(0, 0, "This is a testy little label", $self->{IMAGE});
+    my($w, $h) = $testlabel->_boundingbox($image, "This is a testy little label");
+    $Image::WorldMap::Label::YOFFSET = -int($h / 2);
+    $Image::WorldMap::Label::XOFFSET = 4;
+  }
+
+  return $self;
+}
+
+
+sub add {
+  my($self, $longitude, $latitude, $label, $dot_colour) = @_;
+
+  my($w, $h) = ($self->{W}, $self->{H});
+  $w /= 2;
+
+  my $x = $longitude;
+  my $y = $latitude;
+
+  $x = $x * $w / 180;
+  $y = $y * $h / 180;
+  $y = -$y;
+  $x += $w;
+  $y += ($h/2);
+
+#  print "Adding: $label at $longitude, $latitude ($x, $y)\n";
+
+  # If we're not showing labels, delete the label
+  undef $label unless $self->{LABEL};
+
+  my $newlabel = Image::WorldMap::Label->new(int($x), int($y), $label, $self->{IMAGE}, $dot_colour);
+  push @{$self->{LABELS}}, $newlabel;
+}
+
+
+sub draw {
+  my($self, $filename) = @_;
+
+  my $t_changes = 0;
+  my $t = 0.95;
+  my $nlabels = @{$self->{LABELS}};
+  my $changed = 0;
+  my $changed_successfully = 0;
+  my $steps = 0;
+
+  my @labels = (@{$self->{LABELS}});
+  my $overlaps = $self->number_of_overlaps;
+#  warn "Initial overlaps: $overlaps\n";
+
+  while (1) {
+
+    last if $overlaps == 0;
+
+    fisher_yates_shuffle(\@labels);
+
+    foreach my $l1 (@labels) {
+
+      last if $overlaps == 0;
+
+      my($l1x, $l1y, $l1w, $l1h) =
+	($l1->{X}, $l1->{Y}, $l1->{LABELW}, $l1->{LABELH});
+
+      my($oldlabelx, $oldlabely) = ($l1->{LABELX}, $l1->{LABELY});
+      my $old_overlaps_single = $self->number_of_overlaps_single($l1);
+      my $mode = int(rand(8));
+      if ($mode == 0) {
+	# right
+	$l1->{LABELX} = $l1x + $Image::WorldMap::Label::XOFFSET;
+	$l1->{LABELY} = $l1y + $Image::WorldMap::Label::YOFFSET;
+      } elsif ($mode == 1) {
+	# left
+	$l1->{LABELX} = $l1x - $l1w - $Image::WorldMap::Label::XOFFSET;
+	$l1->{LABELY} = $l1y + $Image::WorldMap::Label::YOFFSET;
+      } elsif ($mode == 2) {
+	# top
+	$l1->{LABELX} = $l1x - $l1w/2;
+	$l1->{LABELY} = $l1y - $l1h;
+      } elsif ($mode == 3) {
+	# bottom
+	$l1->{LABELX} = $l1x - $l1w/2;
+	$l1->{LABELY} = $l1y;
+      } elsif ($mode == 4) {
+	# top right
+	$l1->{LABELX} = $l1x;
+	$l1->{LABELY} = $l1y - $l1h;
+      } elsif ($mode == 5) {
+	# top left
+	$l1->{LABELX} = $l1x - $l1w;
+	$l1->{LABELY} = $l1y - $l1h;
+      } elsif ($mode == 6) {
+	# bottom right
+	$l1->{LABELX} = $l1x;
+	$l1->{LABELY} = $l1y;
+      } elsif ($mode == 7) {
+	# bottom left
+	$l1->{LABELX} = $l1x - $l1w;
+	$l1->{LABELY} = $l1y;
+      }
+
+      my $overlaps_single = $self->number_of_overlaps_single($l1);
+      my $de = $overlaps_single - $old_overlaps_single;
+
+      $steps++;
+
+      if ($de <= 0) {
+	if ($de == 0) {
+	} else {
+	  $changed_successfully++;
+	  $changed++;
+#	  warn "  Moved " . $l1->{TEXT} . " $de\n";
+	}
+	$overlaps += $overlaps_single - $old_overlaps_single;
+      } elsif ($de > 0) {
+	my $p = 1 - exp(-$de/$t);
+#	warn "T $t, p $p\n";
+	if (rand(1) < $p) {
+	  # move label back
+	  $l1->{LABELX} = $oldlabelx;
+	  $l1->{LABELY} = $oldlabely;
+	} else {
+#	  warn "  Moved " . $l1->{TEXT} . " $de (worse)\n";
+	  $changed++;
+	  $overlaps += $overlaps_single - $old_overlaps_single;
+	}
+      }
+    }
+
+#    warn "Overlaps: $overlaps\n";
+
+    if ($steps > $nlabels*20 && $changed == 0) {
+#      warn "No changes\n";
+      last;
+    }
+
+    if ($changed_successfully > $nlabels*5 || $changed > $nlabels*20) {
+      $t *= 0.9;
+      $t_changes++;
+      $changed = 0;
+      $changed_successfully = 0;
+      $steps = 0;
+#      warn "T $t, overlaps $overlaps\n";
+    }
+    last if $t_changes == 50;
+  }
+
+  my $image = $self->{IMAGE};
+# Grey out label background
+#  foreach my $l1 (@{$self->{LABELS}}) {
+#    my($l1x, $l1y, $l1w, $l1h) =
+#      ($l1->labelx, $l1->labely, $l1->labelwidth, $l1->labelheight);
+#    $image->set_color(255, 255, 255, 32);
+#    $image->fill_rectangle($l1x, $l1y, $l1w, $l1h);
+#  }
+  map { $_->draw_dot($image) } @{$self->{LABELS}};
+  map { $_->draw_label($image) } @{$self->{LABELS}};
+
+  $image->save($filename);
+}
+
+sub draw_oldish {
+  my($self, $filename) = @_;
+
+  my @labels = (@{$self->{LABELS}});
+  my $overlaps = $self->number_of_overlaps;
+
+  foreach (1..20) {
+    foreach my $l1 (@labels) {
+      my($l1x, $l1y, $l1w, $l1h) =
+	($l1->{X}, $l1->{Y}, $l1->{LABELW}, $l1->{LABELH});
+
+      my($oldlabelx, $oldlabely) = ($l1->{LABELX}, $l1->{LABELY});
+      my $old_overlaps_single = $self->number_of_overlaps_single($l1);
+      my $mode = int(rand(4));
+      if ($mode == 0) {
+	$l1->{LABELX} = $l1x + $Image::WorldMap::Label::XOFFSET;
+	$l1->{LABELY} = $l1y + $Image::WorldMap::Label::YOFFSET;
+      } elsif ($mode == 1) {
+	$l1->{LABELX} = $l1x - $l1w - $Image::WorldMap::Label::XOFFSET;
+	$l1->{LABELY} = $l1y + $Image::WorldMap::Label::YOFFSET;
+      } elsif ($mode == 2) {
+	$l1->{LABELX} = $l1x - $l1w/2;
+	$l1->{LABELY} = $l1y - $l1h;
+      } elsif ($mode == 3) {
+	$l1->{LABELX} = $l1x - $l1w/2;
+	$l1->{LABELY} = $l1y;
+      }
+
+      my $overlaps_single = $self->number_of_overlaps_single($l1);
+      if ($overlaps_single > $old_overlaps_single) {
+	$l1->{LABELX} = $oldlabelx;
+	$l1->{LABELY} = $oldlabely;
+      } else {
+	$overlaps += $overlaps_single - $old_overlaps_single;
+      }
+    }
+
+    warn "Overlaps: $overlaps\n";
+    last if $overlaps == 0;
+  }
+
+  my $image = $self->{IMAGE};
+#  foreach my $l1 (@{$self->{LABELS}}) {
+#    my($l1x, $l1y, $l1w, $l1h) =
+#      ($l1->labelx, $l1->labely, $l1->labelwidth, $l1->labelheight);
+#    $image->set_color(255, 255, 255, 32);
+#    $image->fill_rectangle($l1x, $l1y, $l1w, $l1h);
+#  }
+  map { $_->draw_dot($image) } @{$self->{LABELS}};
+  map { $_->draw_label($image) } @{$self->{LABELS}};
+
+  $image->save($filename);
+}
+
+sub number_of_overlaps_single {
+  my($self, $l1) = @_;
+
+  my $overlaps = 0;
+  my @labels = (@{$self->{LABELS}});
+
+  my $l1text = $l1->{TEXT};
+  my($l1x, $l1y, $l1w, $l1h) =
+    ($l1->{LABELX}, $l1->{LABELY}, $l1->{LABELW}, $l1->{LABELH});
+  next unless $l1text;
+  foreach my $l2 (@labels) {
+    next if $l1 eq $l2;
+    my $l2text = $l2->{TEXT};
+    next unless $l2text;
+    #      warn "Comparing $l1text against $l2text...\n";
+    my($l2x, $l2y, $l2w, $l2h) =
+      ($l2->{LABELX}, $l2->{LABELY}, $l2->{LABELW}, $l2->{LABELH});
+    my $x = $l1x > $l2x ? $l1x : $l2x;
+    my $y = $l1y > $l2y ? $l1y : $l2y;
+    my $w = ($l1x + $l1w < $l2x + $l2w ? $l1x + $l1w : $l2x + $l2w) - $x;
+    my $h = ($l1y + $l1h < $l2y + $l2h ? $l1y + $l1h : $l2y + $l2h) - $y;
+    if ($w > 0 && $h > 0) {
+      $overlaps++;
+    }
+  }
+  return $overlaps;
+}
+
+
+sub number_of_overlaps {
+  my($self) = @_;
+  my %seen;
+
+  my $overlaps = 0;
+  my @labels = (@{$self->{LABELS}});
+
+  foreach my $l1 (@labels) {
+      my($l1x, $l1y, $l1w, $l1h, $l1text) =
+	($l1->{LABELX}, $l1->{LABELY}, $l1->{LABELW}, $l1->{LABELH}, $l1->{TEXT});
+    next unless $l1text;
+    foreach my $l2 (@labels) {
+      next if $seen{$l1}{$l2}++;
+      next if $seen{$l2}{$l1}++;
+      next if $l1 eq $l2;
+      my $l2text = $l2->{TEXT};
+      next unless $l2text;
+#      warn "Comparing $l1text against $l2text...\n";
+      my($l2x, $l2y, $l2w, $l2h) =
+	($l2->{LABELX}, $l2->{LABELY}, $l2->{LABELW}, $l2->{LABELH});
+      my $x = $l1x > $l2x ? $l1x : $l2x;
+      my $y = $l1y > $l2y ? $l1y : $l2y;
+      my $w = ($l1x + $l1w < $l2x + $l2w ? $l1x + $l1w : $l2x + $l2w) - $x;
+      my $h = ($l1y + $l1h < $l2y + $l2h ? $l1y + $l1h : $l2y + $l2h) - $y;
+	
+#      warn "Overlap: $w x $h\n";
+      if ($w > 0 && $h > 0) {
+#        warn "Overlaps!\n";
+	$overlaps++;
+      }
+
+    }
+  }
+  return $overlaps;
+}
+
+# fisher_yates_shuffle( \@array ) :
+# generate a random permutation of @array in place
+sub fisher_yates_shuffle {
+  my $array = shift;
+  my $i;
+  for ($i = @$array; --$i; ) {
+    my $j = int rand ($i+1);
+    @$array[$i,$j] = @$array[$j,$i];
+  }
+}
+
+__END__
 
 =head1 NAME
 
@@ -61,40 +375,6 @@ load a 20 pixel sized font of cinema.
   # With labels
   my $map = Image::WorldMap->new("earth-small.png", "maian/8");
 
-=cut
-
-# Class method, creates a new map
-sub new {
-  my($class, $filename, $label) = @_;
-
-  my $self = {};
-
-  my $image = Image::Imlib2->load($filename);
-  my $w = $image->get_width;
-  my $h = $image->get_height;
-  $image->add_font_path("../");
-  $image->add_font_path("examples/");
-
-  $self->{IMAGE} = $image;
-  $self->{LABELS} = [];
-  $self->{LABEL} = $label;
-  $self->{W} = $w;
-  $self->{H} = $h;
-  bless $self, $class;
-
-  if (defined $label) {
-    # Determine the label offset for the current font
-    $image->load_font($label);
-    my $testlabel = Image::WorldMap::Label->new(0, 0, "This is a testy little label", $self->{IMAGE});
-    my($w, $h) = $testlabel->_boundingbox($image, "This is a testy little label");
-    $Image::WorldMap::Label::YOFFSET = -int($h / 2);
-    $Image::WorldMap::Label::XOFFSET = 5;
-  }
-
-  return $self;
-}
-
-
 =head2 add
 
 This adds a node to the map, with an optional label. Longitude and
@@ -109,33 +389,6 @@ to make the Bath.pm dot orange, you could do:
 
   $map->add(-2.355399, 51.3828, "Bath.pm", [255,127,0]);
 
-=cut
-
-sub add {
-  my($self, $longitude, $latitude, $label, $dot_colour) = @_;
-
-  my($w, $h) = ($self->{W}, $self->{H});
-  $w /= 2;
-
-  my $x = $longitude;
-  my $y = $latitude;
-
-  $x = $x * $w / 180;
-  $y = $y * $h / 180;
-  $y = -$y;
-  $x += $w;
-  $y += ($h/2);
-
-#  print "Adding: $label at $longitude, $latitude ($x, $y)\n";
-
-  # If we're not showing labels, delete the label
-  undef $label unless $self->{LABEL};
-
-  my $newlabel = Image::WorldMap::Label->new(int($x), int($y), $label, $self->{IMAGE}, $dot_colour);
-  push @{$self->{LABELS}}, $newlabel;
-}
-
-
 =head2 draw
 
 This draws the map and writes it out to a file. The file format is
@@ -143,135 +396,11 @@ chosen from the filename, but is typically PNG.
 
   $map->draw("text.png");
 
-=cut
-
-sub draw {
-  my($self, $filename) = @_;
-
-  if ($self->{LABEL}) {
-
-# Don't bounce a label if it is fine
-    foreach my $label (@{$self->{LABELS}}) {
-      if ($self->_overlapping_labels_single($label) == 0) {
-	$label->{NOBOUNCE}++;
-#	      warn "nobounce: " . $label->text . "\n";
-      }
-    }
-
-#      foreach my $label (@{$self->{LABELS}}) {
-#        $self->_bounce($label);
-#      }
-    # temperature
-    my $t = 200;
-
-    my $i = 1;
-
-#    my @labels = @{$self->{LABELS}};
-    my @labels = grep { not exists $_->{NOBOUNCE} } @{$self->{LABELS}};
-
-    while (1) {
-      # decrease T
-      $t *= 0.9;
-
-      # only do 50 iterations
-      last if $i > 50;
-
-#      warn "$i: overlap=" . $self->_overlapping_labels() . ", t=$t\n";
-      $i++;
-
-      my $nlabels = @{$self->{LABELS}};
-      my $changed = 0;
-
-      foreach (1..20) {
-	
-	fisher_yates_shuffle(\@labels);
-
-	# only change so many labels an iteration
-	last if $changed > 5 * $nlabels;
-
-	foreach my $label (@labels) {
-	
-#	next if $label->{NOBOUNCE};
-#	last if $changed > 5 * $nlabels;
-	
-	  my($x, $y) = ($label->labelx, $label->labely);
-	  my $old_overlap = $self->_overlapping_labels_single($label);
-	  $self->_bounce($label);
-	  my $new_overlap = $self->_overlapping_labels_single($label);
-	  my $delta = $new_overlap - $old_overlap;
-	
-	  if ($delta > 0 and (rand() < (1.0 - exp(-$delta / $t)))) {
-	    $label->move($x, $y); # unbounce
-	    #	print "...unbounced";
-	  } else {
-	    $changed++;
-	  }
-	}
-      }
-    }
-
-    # see if the original location was still better
-    foreach my $label (@labels) {
-      my $old_overlap = $self->_overlapping_labels_single($label);
-#      my $old_overlap = $self->_overlapping_labels();
-      my($x, $y) = ($label->labelx, $label->labely);
-      my($realx, $realy) = ($label->x, $label->y);
-      $label->move($realx, $realy);
-      my $new_overlap = $self->_overlapping_labels_single($label);
-#      my $new_overlap = $self->_overlapping_labels();
-      my $delta = $new_overlap - $old_overlap;
-      if ($delta > 0) {
-	$label->move($x, $y);
-      }
-    }
-  }
-
-  my $image = $self->{IMAGE};
-  map { $_->draw_dot($image) } @{$self->{LABELS}};
-  map { $_->draw_label($image) } @{$self->{LABELS}};
-
-#  print "Total overlap of " . $self->_overlapping_labels() . "\n";
-  $image->save($filename);
-}
-
-
-sub _bounce {
-  my($self, $label) = @_;
-
-  bounce_c($label);
-}
-
-
-# fisher_yates_shuffle( \@array ) :
-# generate a random permutation of @array in place
-sub fisher_yates_shuffle {
-  my $array = shift;
-  my $i;
-  for ($i = @$array; --$i; ) {
-    my $j = int rand ($i+1);
-    @$array[$i,$j] = @$array[$j,$i];
-  }
-}
-
-
-sub _overlapping_labels {
-  my($self) = shift;
-
-  return overlap_c($self->{LABELS});
-}
-
-sub _overlapping_labels_single {
-  my($self, $label) = @_;
-
-  return overlap_single_c($label, $self->{LABELS});
-}
-
-
 =head1 NOTES
 
 This module tries hard to make sure that labels do not overlap. This
 is an NP-hard problem. It currently uses a simulated annealing method
-with Inline::C to speed it up. It could be faster still.
+with some optimisations. It could be faster still.
 
 The label positioning method used is random: if you run the program
 again, you will get a different set of label positions, which may or
@@ -292,167 +421,3 @@ under the same terms as Perl itself.
 =head1 AUTHOR
 
 Leon Brocard, acme@astray.com
-
-=cut
-
-1;
-
-__DATA__
-
-__C__
-
-void bounce_c(SV* hash_ref) {
-  HV* hash;
-  SV* x;
-  SV* y;
-  int r;
-
-  if (!SvROK(hash_ref))
-    croak("hash_ref is not a reference");
-
-  hash = (HV*)SvRV(hash_ref);
-
-  x = *hv_fetch(hash, "X", 1, FALSE);
-  y = *hv_fetch(hash, "Y", 1, FALSE);
-
-  r = (int) (40.0*rand()/(RAND_MAX+1.0));
-  hv_store(hash, "LABELX", 6, newSViv(SvIV(x) + r), 0);
-  r = (int) (80.0*rand()/(RAND_MAX+1.0));
-  r -= 40;
-  hv_store(hash, "LABELY", 6, newSViv(SvIV(y) + r), 0);
-
-  return;
-}
-
-
-
-int overlap_c(SV* labels_ref) {
-  AV* labels;
-  int nlabels;
-  SV* l1;
-  SV* l2;
-  SV* foo;
-  SV** svp;
-  float p;
-  int overlap, i, j;
-  int l1x, l1y, l1w, l1h, l1realx, l1realy;
-  int l2x, l2y, l2w, l2h;
-  int x, y, w, h;
-  int xdiff, ydiff;
-
-  if (!SvROK(labels_ref))
-    croak("labels_ref is not a reference");
-
-  labels = (AV*)SvRV(labels_ref);
-  nlabels = av_len(labels);
-
-/*  printf("nlabels: %i\n", nlabels); */
-
-  overlap = 0;
-
-  for (i = 0; i < nlabels; i++) {
-/*    printf("i: %i\n", i); */
-    l1 = (HV*)SvRV(*av_fetch(labels, i, 0));
-    l1x = SvIV(*hv_fetch(l1, "LABELX", 6, FALSE));
-    l1y = SvIV(*hv_fetch(l1, "LABELY", 6, FALSE));
-    l1w = SvIV(*hv_fetch(l1, "LABELW", 6, FALSE));
-    l1h = SvIV(*hv_fetch(l1, "LABELH", 6, FALSE));
-/*    printf("l1 (%i): (%i, %i) x (%i, %i)\n", i, l1x, l1y, l1w, l1h);  */
-
-    l1realx = SvIV(*hv_fetch(l1, "X", 1, FALSE));
-    l1realy = SvIV(*hv_fetch(l1, "Y", 1, FALSE));
-    xdiff = abs(l1realx - l1x);
-    ydiff = abs(l1realy - l1y);
-    overlap += (int) (sqrt((xdiff * xdiff) + (ydiff * ydiff)));
-
-    for (j = 0; j < nlabels; j++) {
-/*      printf("j: %i\n", j); */
-        if (j < i) {
-
-	l2 = (HV*)SvRV(*av_fetch(labels, j, 0));
-	l2x = SvIV(*hv_fetch(l2, "LABELX", 6, FALSE));
-	l2y = SvIV(*hv_fetch(l2, "LABELY", 6, FALSE));
-	l2w = SvIV(*hv_fetch(l2, "LABELW", 6, FALSE));
-	l2h = SvIV(*hv_fetch(l2, "LABELH", 6, FALSE));
-/*	printf("l2 (%i): (%i, %i) x (%i, %i)\n", j, l2x, l2y, l2w, l2h);  */
-
-	x = l1x > l2x ? l1x : l2x;
-	y = l1y > l2y ? l1y : l2y;
-	w = (l1x + l1w < l2x + l2w ? l1x + l1w : l2x + l2w) - x;
-	h = (l1y + l1h < l2y + l2h ? l1y + l1h : l2y + l2h) - y;
-	
-	if (w > 0 && h > 0) {
-	  overlap += (w * h);
-/*	  printf("overlap: %i\n", overlap); */
-	}
-
-      }
-    }
-  }
-
-  return overlap;
-}
-
-
-int overlap_single_c(SV* l1, SV* labels_ref) {
-  AV* labels;
-  int nlabels;
-  SV* l2;
-  float p;
-  int overlap, i, j;
-  int l1x, l1y, l1w, l1h, l1realx, l1realy;
-  int l2x, l2y, l2w, l2h;
-  int x, y, w, h;
-  int xdiff, ydiff;
-
-  if (!SvROK(labels_ref))
-    croak("labels_ref is not a reference");
-
-  labels = (AV*)SvRV(labels_ref);
-  nlabels = av_len(labels);
-
-/*  printf("nlabels: %i\n", nlabels); */
-
-  overlap = 0;
-
-  l1 = (HV*)SvRV(l1);
-
-  l1x = SvIV(*hv_fetch(l1, "LABELX", 6, FALSE));
-  l1y = SvIV(*hv_fetch(l1, "LABELY", 6, FALSE));
-  l1w = SvIV(*hv_fetch(l1, "LABELW", 6, FALSE));
-  l1h = SvIV(*hv_fetch(l1, "LABELH", 6, FALSE));
-/*    printf("l1 (%i): (%i, %i) x (%i, %i)\n", i, l1x, l1y, l1w, l1h);  */
-
-  l1realx = SvIV(*hv_fetch(l1, "X", 1, FALSE));
-  l1realy = SvIV(*hv_fetch(l1, "Y", 1, FALSE));
-  xdiff = abs(l1realx - l1x);
-  ydiff = abs(l1realy - l1y);
-  overlap += (int) (sqrt((xdiff * xdiff) + (ydiff * ydiff)));
-
-  for (j = 0; j < nlabels; j++) {
-/*      printf("j: %i\n", j); */
-
-    l2 = (HV*)SvRV(*av_fetch(labels, j, 0));
-
-    if (l1 != l2) { 
-
-      l2x = SvIV(*hv_fetch(l2, "LABELX", 6, FALSE));
-      l2y = SvIV(*hv_fetch(l2, "LABELY", 6, FALSE));
-      l2w = SvIV(*hv_fetch(l2, "LABELW", 6, FALSE));
-      l2h = SvIV(*hv_fetch(l2, "LABELH", 6, FALSE));
-/*	printf("l2 (%i): (%i, %i) x (%i, %i)\n", j, l2x, l2y, l2w, l2h);  */
-
-      x = l1x > l2x ? l1x : l2x;
-      y = l1y > l2y ? l1y : l2y;
-      w = (l1x + l1w < l2x + l2w ? l1x + l1w : l2x + l2w) - x;
-      h = (l1y + l1h < l2y + l2h ? l1y + l1h : l2y + l2h) - y;
-	
-      if (w > 0 && h > 0) {
-        overlap += (w * h);
-/*	  printf("overlap: %i\n", overlap); */
-      }
-    }
-  }
-
-  return overlap;
-}

@@ -16,11 +16,10 @@ if (not GetOptions("huge!" => \$opt_huge, "help" => \$opt_help)
   exec "perldoc $0";
 }
 
-my ($filein, $fileout, $label, $type);
+my ($filein, $fileout, $label);
 
 if ($opt_huge) {
-#  $filein = '../earth.png';
-  $filein = '../earth-huge.png';
+  $filein = '../earth-huge.ppm';
 
   $fileout = 'mongers.png';
   $label = "maian/6";
@@ -30,7 +29,7 @@ if ($opt_huge) {
   $fileout = 'mongers-small.png';
 }
 
-mirror("http://www.pm.org/XML/perl_mongers.xml", "perl_mongers.xml") unless -f "perl_mongers.xml";
+mirror("http://www.pm.org/groups/perl_mongers.xml", "perl_mongers.xml") unless -f "perl_mongers.xml";
 
 my $map = Image::WorldMap->new($filein, $label);
 
@@ -45,6 +44,8 @@ my @groups;
 
 foreach my $name (keys %$xml) {
   my $group = $xml->{$name};
+  my $status = $group->{status} || 'not-specified-in-xml-file';
+  next unless $status eq 'active' || $status eq 'sleeping';
 
 #  next unless $group->{location}->{continent} eq 'Europe'; # SKIP
 
