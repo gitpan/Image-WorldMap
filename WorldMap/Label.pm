@@ -1,0 +1,178 @@
+package Image::WorldMap::Label;
+
+use strict;
+use Image::Imlib2;
+use Exporter;
+use vars qw(@ISA @EXPORT_OK $TYPE $XOFFSET $YOFFSET);
+
+@ISA = qw(Exporter);
+@EXPORT_OK = qw(new 
+		text
+		x
+		y
+		width
+		height
+		move
+		draw
+	       );
+
+#my $XOFFSET = 5;
+#my $YOFFSET = -9;
+
+$XOFFSET = 0;
+$YOFFSET = 0;
+
+# Class method, creates a new label, given x, y and text
+sub new {
+  my($class, $x, $y, $text, $image) = @_;
+  my $self = {};
+
+  $self->{X} = $x;
+  $self->{Y} = $y;
+  $self->{LABELX} = $x;
+  $self->{LABELY} = $y;
+  $self->{TEXT} = $text;
+
+  bless $self, $class;
+
+  my($w, $h) = (0, 0);
+  ($w, $h) = $self->_boundingbox($image, $text) if defined $text;
+  $self->{LABELW} = $w;
+  $self->{LABELH} = $h;
+  return $self;
+}
+
+sub x {
+  my $self = shift;
+  return $self->{X};
+}
+
+sub y {
+  my $self = shift;
+  return $self->{Y};
+}
+
+sub labelx {
+  my $self = shift;
+  return $self->{LABELX};
+}
+
+sub labely {
+  my $self = shift;
+  return $self->{LABELY};
+}
+
+sub text {
+  my $self = shift;
+  return $self->{TEXT};
+}
+
+sub labelwidth {
+  my $self = shift;
+  return $self->{LABELW};
+}
+
+sub labelheight {
+  my $self = shift;
+  return $self->{LABELH};
+}
+
+sub move {
+  my($self, $x, $y) = @_;
+  $self->{LABELX} = $x;
+  $self->{LABELY} = $y;
+}
+
+sub draw_label {
+  my($self, $image) = @_;
+  my($x, $y, $labelx, $labely, $text) = ($self->{X}, $self->{Y}, $self->{LABELX}, $self->{LABELY}, $self->{TEXT});
+  $labelx += $XOFFSET;
+  $labely += $YOFFSET;
+
+  if (defined $text) {
+    # Draw the white outline
+    $image->set_color(255, 255, 255, 64);
+    $image->draw_text($labelx+1, $labely+1, $text);
+    $image->draw_text($labelx-1, $labely-1, $text);
+    $image->draw_text($labelx+1, $labely-1, $text);
+    $image->draw_text($labelx-1, $labely+1, $text);
+
+    # And finally draw the black text in the middle
+    $image->set_color(0, 0, 0, 255);
+    $image->draw_text($labelx, $labely, $text);
+  }
+}
+
+sub draw_dot {
+  my($self, $image) = @_;
+  my($x, $y, $labelx, $labely, $text) = ($self->{X}, $self->{Y}, $self->{LABELX}, $self->{LABELY}, $self->{TEXT});
+
+  my $radius = 1;
+
+  if ($labelx != $x or $labely != $y) {
+    # moved
+
+    my($q, $w) = ($labelx, $labely);
+
+    $image->set_colour(127, 0, 0, 255);
+    $image->draw_line($x, $y, $q, $w);
+
+    $image->set_colour(0, 0, 0, 64);
+    $image->fill_ellipse($q, $w, 2, 2);
+    $image->set_colour(255, 255, 255, 255);
+    $image->draw_point($q, $w);
+    $image->set_colour(255, 255, 255, 192);
+    $image->draw_point($q-1, $w);
+    $image->draw_point($q+1, $w);
+    $image->draw_point($q, $w-1);
+    $image->draw_point($q, $w+1);
+    $image->set_colour(255, 255, 255, 128);
+    $image->draw_point($q-1, $w-1);
+    $image->draw_point($q-1, $w+1);
+    $image->draw_point($q+1, $w-1);
+    $image->draw_point($q+1, $w+1);
+  }
+
+  if (defined $text) {
+    $image->set_colour(255, 0, 0, 255);
+    $image->fill_ellipse($x, $y, $radius, $radius);
+    $image->set_colour(0, 0, 0, 100);
+    $image->fill_ellipse($x, $y, 2, 2);
+    $image->set_colour(255, 0, 0, 255);
+    $image->draw_point($x, $y);
+    $image->set_colour(255, 0, 0, 192);
+    $image->draw_point($x-1, $y);
+    $image->draw_point($x+1, $y);
+    $image->draw_point($x, $y-1);
+    $image->draw_point($x, $y+1);
+    $image->set_colour(255, 0, 0, 128);
+    $image->draw_point($x-1, $y-1);
+    $image->draw_point($x-1, $y+1);
+    $image->draw_point($x+1, $y-1);
+    $image->draw_point($x+1, $y+1);
+
+  } else {
+    $image->set_colour(200, 0, 0, 255); # 255
+    $image->draw_point($x, $y);
+    $image->set_colour(200, 0, 0, 128); # 128
+    $image->draw_point($x-1, $y);
+    $image->draw_point($x+1, $y);
+    $image->draw_point($x, $y-1);
+    $image->draw_point($x, $y+1);
+    $image->set_colour(200, 0, 0, 64); # 64
+    $image->draw_point($x-1, $y-1);
+    $image->draw_point($x-1, $y+1);
+    $image->draw_point($x+1, $y-1);
+    $image->draw_point($x+1, $y+1);
+  }
+}
+
+
+# private method
+sub _boundingbox($) {
+  my($self, $image, $text) = @_;
+
+  return $image->get_text_size($text);
+}
+
+1;

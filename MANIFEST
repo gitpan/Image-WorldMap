@@ -1,0 +1,12 @@
+Changes
+MANIFEST
+Makefile.PL
+README
+WorldMap.pm
+WorldMap/Label.pm
+examples/cpan_mirrors/draw.pl
+examples/debian/draw.pl
+examples/earth-small.png
+examples/maian.ttf
+examples/perl_mongers/draw.pl
+t/simple.t
