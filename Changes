@@ -1,5 +1,9 @@
 Revision history for Perl extension Image::WorldMap.
 
+0.12 Sat Dec 14 11:50:18 GMT 2002
+	- make dots a little clearer (no longer use imlib's buggy
+          fill_ellipse)
+
 0.11 Sat Sep  7 12:26:08 BST 2002
 	- better synopsis and coloured dots thanks to Nathan.Bailey
 	- lines, labels slightly more defined

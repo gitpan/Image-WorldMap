@@ -135,56 +135,90 @@ sub draw_dot {
     $image->set_colour(@quarter_colour, 255);
     $image->draw_line($x, $y, $q, $w);
 
+    $image->set_colour(0, 0, 0, 255);
+    $image->draw_point($q-1, $w-1);
+    $image->draw_point($q+1, $w-1);
+    $image->draw_point($q-1, $w+1);
+    $image->draw_point($q+1, $w+1);
+    $image->draw_point($q-1, $w);
+    $image->draw_point($q+1, $w);
+    $image->draw_point($q, $w-1);
+    $image->draw_point($q, $w+1);
+
+    $image->set_colour(0, 0, 0, 128);
+    $image->draw_point($q-2, $w);
+    $image->draw_point($q+2, $w);
+    $image->draw_point($q, $w-2);
+    $image->draw_point($q, $w+2);
+
     $image->set_colour(0, 0, 0, 64);
-    $image->fill_ellipse($q, $w, 2, 2);
+    $image->draw_point($q-2, $w+1);
+    $image->draw_point($q-2, $w-1);
+    $image->draw_point($q+2, $w-1);
+    $image->draw_point($q+2, $w+1);
+    $image->draw_point($q-1, $w-2);
+    $image->draw_point($q+1, $w-2);
+    $image->draw_point($q-1, $w+2);
+    $image->draw_point($q+1, $w+2);
+
     $image->set_colour(255, 255, 255, 255);
     $image->draw_point($q, $w);
+
     $image->set_colour(255, 255, 255, 192);
     $image->draw_point($q-1, $w);
     $image->draw_point($q+1, $w);
     $image->draw_point($q, $w-1);
     $image->draw_point($q, $w+1);
+
     $image->set_colour(255, 255, 255, 128);
     $image->draw_point($q-1, $w-1);
-    $image->draw_point($q-1, $w+1);
     $image->draw_point($q+1, $w-1);
+    $image->draw_point($q-1, $w+1);
     $image->draw_point($q+1, $w+1);
+
   }
 
-  if (defined $text) {
-    $image->set_colour(@$dot_colour, 255);
-    $image->fill_ellipse($x, $y, $radius, $radius);
-    $image->set_colour(0, 0, 0, 100);
-    $image->fill_ellipse($x, $y, 2, 2);
-    $image->set_colour(@$dot_colour, 255);
-    $image->draw_point($x, $y);
-    $image->set_colour(@$dot_colour, 192);
-    $image->draw_point($x-1, $y);
-    $image->draw_point($x+1, $y);
-    $image->draw_point($x, $y-1);
-    $image->draw_point($x, $y+1);
-    $image->set_colour(@$dot_colour, 128);
-    $image->draw_point($x-1, $y-1);
-    $image->draw_point($x-1, $y+1);
-    $image->draw_point($x+1, $y-1);
-    $image->draw_point($x+1, $y+1);
+  $image->set_colour(0, 0, 0, 255);
+  $image->draw_point($x-1, $y-1);
+  $image->draw_point($x+1, $y-1);
+  $image->draw_point($x-1, $y+1);
+  $image->draw_point($x+1, $y+1);
+  $image->draw_point($x-1, $y);
+  $image->draw_point($x+1, $y);
+  $image->draw_point($x, $y-1);
+  $image->draw_point($x, $y+1);
 
-  } else {
-    $image->set_colour(@$dot_colour, 255); # 255
-    $image->draw_point($x, $y);
-    $image->set_colour(@$dot_colour, 128); # 128
-    $image->draw_point($x-1, $y);
-    $image->draw_point($x+1, $y);
-    $image->draw_point($x, $y-1);
-    $image->draw_point($x, $y+1);
-    $image->set_colour(@$dot_colour, 64); # 64
-    $image->draw_point($x-1, $y-1);
-    $image->draw_point($x-1, $y+1);
-    $image->draw_point($x+1, $y-1);
-    $image->draw_point($x+1, $y+1);
-  }
+  $image->set_colour(0, 0, 0, 128);
+  $image->draw_point($x-2, $y);
+  $image->draw_point($x+2, $y);
+  $image->draw_point($x, $y-2);
+  $image->draw_point($x, $y+2);
+
+  $image->set_colour(0, 0, 0, 64);
+  $image->draw_point($x-2, $y+1);
+  $image->draw_point($x-2, $y-1);
+  $image->draw_point($x+2, $y-1);
+  $image->draw_point($x+2, $y+1);
+  $image->draw_point($x-1, $y-2);
+  $image->draw_point($x+1, $y-2);
+  $image->draw_point($x-1, $y+2);
+  $image->draw_point($x+1, $y+2);
+
+  $image->set_colour(@$dot_colour, 255);
+  $image->draw_point($x, $y);
+
+  $image->set_colour(@$dot_colour, 192);
+  $image->draw_point($x-1, $y);
+  $image->draw_point($x+1, $y);
+  $image->draw_point($x, $y-1);
+  $image->draw_point($x, $y+1);
+
+  $image->set_colour(@$dot_colour, 128);
+  $image->draw_point($x-1, $y-1);
+  $image->draw_point($x+1, $y-1);
+  $image->draw_point($x-1, $y+1);
+  $image->draw_point($x+1, $y+1);
 }
-
 
 # private method
 sub _boundingbox($) {

@@ -4,7 +4,7 @@ use strict;
 use Image::Imlib2;
 use Image::WorldMap::Label;
 use vars qw($VERSION);
-$VERSION = '0.11';
+$VERSION = '0.12';
 
 use Inline C => 'DATA',
   VERSION => '0.11',
