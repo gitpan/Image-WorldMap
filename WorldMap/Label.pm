@@ -24,14 +24,14 @@ $YOFFSET = 0;
 
 # Class method, creates a new label, given x, y and text
 sub new {
-  my($class, $x, $y, $text, $image) = @_;
+  my($class, $x, $y, $text, $image, $dot_colour) = @_;
   my $self = {};
-
   $self->{X} = $x;
   $self->{Y} = $y;
   $self->{LABELX} = $x;
   $self->{LABELY} = $y;
   $self->{TEXT} = $text;
+  $self->{DOTCOLOUR} = $dot_colour;
 
   bless $self, $class;
 
@@ -91,11 +91,15 @@ sub draw_label {
 
   if (defined $text) {
     # Draw the white outline
-    $image->set_color(255, 255, 255, 64);
+    $image->set_color(255, 255, 255, 32);
     $image->draw_text($labelx+1, $labely+1, $text);
     $image->draw_text($labelx-1, $labely-1, $text);
     $image->draw_text($labelx+1, $labely-1, $text);
     $image->draw_text($labelx-1, $labely+1, $text);
+    $image->draw_text($labelx+1, $labely, $text);
+    $image->draw_text($labelx-1, $labely, $text);
+    $image->draw_text($labelx, $labely-1, $text);
+    $image->draw_text($labelx, $labely+1, $text);
 
     # And finally draw the black text in the middle
     $image->set_color(0, 0, 0, 255);
@@ -105,7 +109,17 @@ sub draw_label {
 
 sub draw_dot {
   my($self, $image) = @_;
-  my($x, $y, $labelx, $labely, $text) = ($self->{X}, $self->{Y}, $self->{LABELX}, $self->{LABELY}, $self->{TEXT});
+  my($x, $y, $labelx, $labely, $text, $dot_colour) =
+    ($self->{X}, $self->{Y}, $self->{LABELX}, $self->{LABELY}, $self->{TEXT}, $self->{DOTCOLOUR});
+  @$dot_colour = (255, 0, 0) if (!defined $dot_colour);
+  @$dot_colour = (255, 0, 0) if (!defined $dot_colour);
+  my @colour = @$dot_colour;
+  my @quarter_colour = map {
+                                int($_ / 4);
+                       	} @$dot_colour;
+  my @half_colour = map {   
+                               	int($_ / 2);
+                       	} @$dot_colour;
 
   my $radius = 1;
 
@@ -114,7 +128,11 @@ sub draw_dot {
 
     my($q, $w) = ($labelx, $labely);
 
-    $image->set_colour(127, 0, 0, 255);
+    $image->set_color(255, 255, 255, 32);
+    $image->draw_line($x-1, $y-1, $q-1, $w-1);
+    $image->draw_line($x+1, $y+1, $q+1, $w+1);
+
+    $image->set_colour(@quarter_colour, 255);
     $image->draw_line($x, $y, $q, $w);
 
     $image->set_colour(0, 0, 0, 64);
@@ -134,32 +152,32 @@ sub draw_dot {
   }
 
   if (defined $text) {
-    $image->set_colour(255, 0, 0, 255);
+    $image->set_colour(@$dot_colour, 255);
     $image->fill_ellipse($x, $y, $radius, $radius);
     $image->set_colour(0, 0, 0, 100);
     $image->fill_ellipse($x, $y, 2, 2);
-    $image->set_colour(255, 0, 0, 255);
+    $image->set_colour(@$dot_colour, 255);
     $image->draw_point($x, $y);
-    $image->set_colour(255, 0, 0, 192);
+    $image->set_colour(@$dot_colour, 192);
     $image->draw_point($x-1, $y);
     $image->draw_point($x+1, $y);
     $image->draw_point($x, $y-1);
     $image->draw_point($x, $y+1);
-    $image->set_colour(255, 0, 0, 128);
+    $image->set_colour(@$dot_colour, 128);
     $image->draw_point($x-1, $y-1);
     $image->draw_point($x-1, $y+1);
     $image->draw_point($x+1, $y-1);
     $image->draw_point($x+1, $y+1);
 
   } else {
-    $image->set_colour(200, 0, 0, 255); # 255
+    $image->set_colour(@$dot_colour, 255); # 255
     $image->draw_point($x, $y);
-    $image->set_colour(200, 0, 0, 128); # 128
+    $image->set_colour(@$dot_colour, 128); # 128
     $image->draw_point($x-1, $y);
     $image->draw_point($x+1, $y);
     $image->draw_point($x, $y-1);
     $image->draw_point($x, $y+1);
-    $image->set_colour(200, 0, 0, 64); # 64
+    $image->set_colour(@$dot_colour, 64); # 64
     $image->draw_point($x-1, $y-1);
     $image->draw_point($x-1, $y+1);
     $image->draw_point($x+1, $y-1);

@@ -4,10 +4,10 @@ use strict;
 use Image::Imlib2;
 use Image::WorldMap::Label;
 use vars qw($VERSION);
-$VERSION = '0.10';
+$VERSION = '0.11';
 
 use Inline C => 'DATA',
-  VERSION => '0.10',
+  VERSION => '0.11',
   NAME => 'Image::WorldMap';
 
 =head1 NAME
@@ -16,6 +16,7 @@ Image::WorldMap - Create graphical world maps of data
 
 =head1 SYNOPSIS
 
+  use Image::WorldMap;
   my $map = Image::WorldMap->new("earth-small.png", "maian/8");
   $map->add(4.91, 52.35, "Amsterdam.pm");
   $map->add(-2.355399, 51.3828, "Bath.pm");
@@ -103,10 +104,15 @@ the Greenwich meridian and the equator and (-180, -180) top-left and
 
   $map->add(-2.355399, 51.3828, "Bath.pm");
 
+You can also add a colour as a red, green, blue triple. For example,
+to make the Bath.pm dot orange, you could do:
+
+  $map->add(-2.355399, 51.3828, "Bath.pm", [255,127,0]);
+
 =cut
 
 sub add {
-  my($self, $longitude, $latitude, $label) = @_;
+  my($self, $longitude, $latitude, $label, $dot_colour) = @_;
 
   my($w, $h) = ($self->{W}, $self->{H});
   $w /= 2;
@@ -125,7 +131,7 @@ sub add {
   # If we're not showing labels, delete the label
   undef $label unless $self->{LABEL};
 
-  my $newlabel = Image::WorldMap::Label->new(int($x), int($y), $label, $self->{IMAGE});
+  my $newlabel = Image::WorldMap::Label->new(int($x), int($y), $label, $self->{IMAGE}, $dot_colour);
   push @{$self->{LABELS}}, $newlabel;
 }
 
@@ -278,7 +284,7 @@ before using the image on the web.
 
 =head1 COPYRIGHT
 
-Copyright (C) 2001, Leon Brocard
+Copyright (C) 2001-2, Leon Brocard
 
 This module is free software; you can redistribute it or modify it
 under the same terms as Perl itself.

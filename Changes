@@ -1,5 +1,11 @@
 Revision history for Perl extension Image::WorldMap.
 
+0.11 Sat Sep  7 12:26:08 BST 2002
+	- better synopsis and coloured dots thanks to Nathan.Bailey
+	- lines, labels slightly more defined
+	- new earth-small.png world map thanks to NASA
+	  http://earthobservatory.nasa.gov/Newsroom/BlueMarble/
+
 0.10 Thu Jul 12 17:41:43 BST 2001
 	- first release to CPAN
 

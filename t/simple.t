@@ -7,7 +7,7 @@
 
 use strict;
 use Test;
-BEGIN { plan tests => 6 };
+BEGIN { plan tests => 8 };
 use Image::WorldMap;
 ok(1); # If we made it this far, we're ok.
 
@@ -22,10 +22,16 @@ ok(1);
 $map->add(4.91, 52.35, "Amsterdam.pm");
 ok(1);
 
-$map->add(-2.355399, 51.3828, "Bath.pm");
+$map->add(-2.355399, 51.3828, "Bath.pm", [255,127,0]);
 ok(1);
 
-$map->add(-0.093999, 51.3627, "Croydon.pm");
+$map->add(-0.093999, 51.3627, "Croydon.pm", [0,255, 255]);
+ok(1);
+
+$map->add(0, 0, undef, [0,0,255]);
+ok(1);
+
+$map->add(-10, 0);
 ok(1);
 
 $map->draw("test.png");
